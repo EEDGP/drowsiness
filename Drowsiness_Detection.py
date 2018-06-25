@@ -3,6 +3,11 @@ from imutils import face_utils
 import imutils
 import dlib
 import cv2
+import ctypes
+import math
+import os
+import time
+
 
 def eye_aspect_ratio(eye):
 	A = distance.euclidean(eye[1], eye[5])
@@ -41,11 +46,38 @@ while True:
 			flag += 1
 			print (flag)
 			if flag >= frame_check:
-				cv2.putText(frame, "****************ALERT!****************", (10, 30),
-					cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-				cv2.putText(frame, "****************ALERT!****************", (10,325),
-					cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-				#print ("Drowsy")
+
+
+				EV_SND = 0x12  # linux/input-event-codes.h
+				SND_TONE = 0x2  # ditto
+				time_t = suseconds_t = ctypes.c_long
+
+				class Timeval(ctypes.Structure):
+				    _fields_ = [('tv_sec', time_t),       # seconds
+				                ('tv_usec', suseconds_t)] # microseconds
+
+				class InputEvent(ctypes.Structure):
+				    _fields_ = [('time', Timeval),
+				                ('type', ctypes.c_uint16),
+				                ('code', ctypes.c_uint16),
+				                ('value', ctypes.c_int32)]
+
+
+				frequency = 440  # Hz, A440 in ISO 16
+				device = "/dev/input/by-path/platform-pcspkr-event-spkr"
+				pcspkr_fd = os.open(device, os.O_WRONLY)  # root! + modprobe pcspkr
+				fsec, sec = math.modf(time.time())  # current time
+				ev = InputEvent(time=Timeval(tv_sec=int(sec), tv_usec=int(fsec * 1000000)),
+				                type=EV_SND,
+				                code=SND_TONE,
+				                value=frequency)
+				os.write(pcspkr_fd, ev)  # start beep
+				try:
+				    time.sleep(0.2)  # 200 milliseconds
+				finally:
+				    ev.value = 0  # stop
+				    os.write(pcspkr_fd, ev)
+
 		else:
 			flag = 0
 	cv2.imshow("Frame", frame)
